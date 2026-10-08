@@ -1,0 +1,1186 @@
+openapi: 3.0.3
+info:
+  title: E-Bookstore Platform API (BookWorm)
+  description: >
+    Complete Backend REST API specification for the E-Bookstore Capstone Project.
+    Developed with AI-Augmented Workflow using IBM BOB.
+    Supports user authentication, catalog browsing, recommendations, cart operations,
+    shipping estimation, payment gateways (Cards, UPI, Wallets), gift point redemptions,
+    and 48-hour order cancellation / returns.
+  version: 1.0.0
+  contact:
+    name: Backend Engineering Team
+    email: api-support@bookworm.example.com
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Local Development Server
+
+tags:
+  - name: Member & Auth
+    description: User registration, authentication, profile, addresses, and order history
+  - name: Catalog & Books
+    description: Book catalog, category browsing, brand/publisher filters, and search
+  - name: Recommendations
+    description: Personalized recommendation engine, bestsellers, new launches, cross-sell & up-sell
+  - name: Cart
+    description: Shopping cart management, item quantity adjustments, and basket totals
+  - name: Shipping
+    description: Tentative delivery date calculation, shipping rates, and delivery addresses
+  - name: Payment & Wallet
+    description: Payment gateways (Credit/Debit Card, UPI, Wallet), coupon & gift point redemption
+  - name: Orders
+    description: Order placement, checkout, order history with 'Buy In Again', and 48-hr cancellation
+
+paths:
+  # ---------------- MEMBER & AUTH ----------------
+  /auth/register:
+    post:
+      tags: [Member & Auth]
+      summary: Register a new customer
+      operationId: registerUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          description: Invalid request or email already exists
+
+  /auth/login:
+    post:
+      tags: [Member & Auth]
+      summary: Authenticate user / guest login
+      operationId: loginUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: Invalid credentials
+
+  /members/{userId}/profile:
+    get:
+      tags: [Member & Auth]
+      summary: Get user profile details
+      operationId: getUserProfile
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Profile details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+
+  /members/{userId}/addresses:
+    get:
+      tags: [Member & Auth]
+      summary: Get saved shipping addresses for user
+      operationId: getUserAddresses
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: List of saved addresses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AddressDto'
+    post:
+      tags: [Member & Auth]
+      summary: Save a new delivery address
+      operationId: addAddress
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddressDto'
+      responses:
+        '201':
+          description: Address saved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AddressDto'
+
+  # ---------------- CATALOG & BOOKS ----------------
+  /catalog/categories:
+    get:
+      tags: [Catalog & Books]
+      summary: Get all book categories
+      operationId: getCategories
+      responses:
+        '200':
+          description: List of categories (Romance, Mystery, Sci-Fi, Non-Fiction, Self-Help, etc.)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CategoryDto'
+
+  /catalog/books:
+    get:
+      tags: [Catalog & Books]
+      summary: Search and filter book catalog
+      operationId: searchBooks
+      parameters:
+        - name: categoryId
+          in: query
+          schema:
+            type: integer
+        - name: language
+          in: query
+          schema:
+            type: string
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum: [Paperback, Hardcover, eBook]
+        - name: minPrice
+          in: query
+          schema:
+            type: number
+        - name: maxPrice
+          in: query
+          schema:
+            type: number
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+            enum: [relevance, price_low_to_high, price_high_to_low, rating]
+      responses:
+        '200':
+          description: Paginated/Filtered list of books
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BookDto'
+
+  /catalog/books/{bookId}:
+    get:
+      tags: [Catalog & Books]
+      summary: Get detailed book information with tentative delivery and reviews
+      operationId: getBookById
+      parameters:
+        - name: bookId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Book details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookDetailDto'
+        '404':
+          description: Book not found
+
+  /catalog/books/{bookId}/reviews:
+    post:
+      tags: [Catalog & Books]
+      summary: Submit a review and rating for a book
+      operationId: addReview
+      parameters:
+        - name: bookId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewRequest'
+      responses:
+        '201':
+          description: Review created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReviewDto'
+
+  # ---------------- RECOMMENDATIONS ----------------
+  /recommendations/personalized:
+    get:
+      tags: [Recommendations]
+      summary: Get recommendations based on user order history
+      operationId: getPersonalizedRecommendations
+      parameters:
+        - name: userId
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Recommended books
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BookDto'
+
+  /recommendations/bestsellers:
+    get:
+      tags: [Recommendations]
+      summary: Get bestsellers of this month
+      operationId: getBestsellers
+      responses:
+        '200':
+          description: Bestseller books
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BookDto'
+
+  /recommendations/new-launches:
+    get:
+      tags: [Recommendations]
+      summary: Get new launches
+      operationId: getNewLaunches
+      responses:
+        '200':
+          description: Newly launched books
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BookDto'
+
+  /recommendations/related/{bookId}:
+    get:
+      tags: [Recommendations]
+      summary: Get related / cross-sell and up-sell reads for a specific book
+      operationId: getRelatedBooks
+      parameters:
+        - name: bookId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Cross-sell and related books
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BookDto'
+
+  # ---------------- CART ----------------
+  /cart:
+    get:
+      tags: [Cart]
+      summary: Get current active cart
+      operationId: getCart
+      parameters:
+        - name: userId
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: User cart
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CartDto'
+    post:
+      tags: [Cart]
+      summary: Add book to shopping basket
+      operationId: addToCart
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddToCartRequest'
+      responses:
+        '200':
+          description: Updated cart
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CartDto'
+
+  /cart/items/{cartItemId}:
+    put:
+      tags: [Cart]
+      summary: Update cart item quantity
+      operationId: updateCartItem
+      parameters:
+        - name: cartItemId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCartItemRequest'
+      responses:
+        '200':
+          description: Updated cart
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CartDto'
+    delete:
+      tags: [Cart]
+      summary: Remove item from cart
+      operationId: removeFromCart
+      parameters:
+        - name: cartItemId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Updated cart
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CartDto'
+
+  # ---------------- SHIPPING ----------------
+  /shipping/calculate:
+    post:
+      tags: [Shipping]
+      summary: Calculate shipping rate and tentative delivery date
+      operationId: calculateShipping
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShippingRateRequest'
+      responses:
+        '200':
+          description: Shipping rate and delivery timeline
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShippingRateResponse'
+
+  # ---------------- PAYMENT & REDEMPTIONS ----------------
+  /payments/process:
+    post:
+      tags: [Payment & Wallet]
+      summary: Process payment via Credit/Debit card, UPI, or Wallet
+      operationId: processPayment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRequest'
+      responses:
+        '200':
+          description: Payment transaction status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponse'
+
+  /payments/validate-coupon:
+    post:
+      tags: [Payment & Wallet]
+      summary: Validate and apply discount coupon
+      operationId: validateCoupon
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CouponRequest'
+      responses:
+        '200':
+          description: Coupon calculation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CouponResponse'
+
+  /payments/redeem-points:
+    post:
+      tags: [Payment & Wallet]
+      summary: Redeem user reward gift points for cart discount
+      operationId: redeemGiftPoints
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RedeemPointsRequest'
+      responses:
+        '200':
+          description: Gift point redemption result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RedeemPointsResponse'
+
+  # ---------------- ORDERS ----------------
+  /orders/checkout:
+    post:
+      tags: [Orders]
+      summary: Place order from current cart (Checkout)
+      operationId: checkoutOrder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckoutRequest'
+      responses:
+        '201':
+          description: Order created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+
+  /orders/user/{userId}:
+    get:
+      tags: [Orders]
+      summary: Get order history for user
+      operationId: getUserOrders
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: List of user orders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OrderResponse'
+
+  /orders/{orderId}:
+    get:
+      tags: [Orders]
+      summary: Get specific order details
+      operationId: getOrderById
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Order details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+
+  /orders/{orderId}/cancel:
+    post:
+      tags: [Orders]
+      summary: Cancel order (Allowed within 48 hours of purchase)
+      operationId: cancelOrder
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelOrderRequest'
+      responses:
+        '200':
+          description: Cancellation processed with refund confirmation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '400':
+          description: Cancellation window expired (> 48 hours) or invalid state
+
+  /orders/{orderId}/buy-again:
+    post:
+      tags: [Orders]
+      summary: Re-add all items from previous order to cart (Buy In Again feature)
+      operationId: buyAgain
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                userId:
+                  type: integer
+      responses:
+        '200':
+          description: Cart updated with previous order items
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CartDto'
+
+components:
+  schemas:
+    RegisterRequest:
+      type: object
+      required: [fullName, email, password]
+      properties:
+        fullName:
+          type: string
+          example: Daniel Reed
+        email:
+          type: string
+          example: daniel@example.com
+        password:
+          type: string
+          example: password123
+        phone:
+          type: string
+          example: '+91 1234567890'
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          example: daniel@example.com
+        password:
+          type: string
+          example: password123
+
+    AuthResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        userId:
+          type: integer
+          example: 1
+        fullName:
+          type: string
+          example: Daniel Reed
+        email:
+          type: string
+          example: daniel@example.com
+        giftPoints:
+          type: integer
+          example: 250
+
+    UserResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        fullName:
+          type: string
+          example: Daniel Reed
+        email:
+          type: string
+          example: daniel@example.com
+        phone:
+          type: string
+          example: '+91 1234567890'
+        giftPoints:
+          type: integer
+          example: 250
+        role:
+          type: string
+          example: REGISTERED_USER
+
+    AddressDto:
+      type: object
+      required: [firstName, lastName, addressLine, city, state, pin, country, phone]
+      properties:
+        id:
+          type: integer
+          example: 1
+        firstName:
+          type: string
+          example: Daniel
+        lastName:
+          type: string
+          example: Reed
+        addressLine:
+          type: string
+          example: 45 Market Street, Suite 200
+        city:
+          type: string
+          example: Mumbai
+        state:
+          type: string
+          example: Maharashtra
+        pin:
+          type: string
+          example: '400001'
+        country:
+          type: string
+          example: India
+        phone:
+          type: string
+          example: '+91 1234567890'
+        email:
+          type: string
+          example: daniel@example.com
+        isDefault:
+          type: boolean
+          example: true
+
+    CategoryDto:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: Non-Fiction
+        slug:
+          type: string
+          example: non-fiction
+        description:
+          type: string
+          example: Practical guides and self-growth books
+
+    BookDto:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        title:
+          type: string
+          example: The Joy of Minimalism
+        author:
+          type: string
+          example: Daniel Reed
+        publisher:
+          type: string
+          example: ABC Publishers
+        categoryName:
+          type: string
+          example: Non-Fiction / Self Help
+        price:
+          type: number
+          example: 149.0
+        format:
+          type: string
+          example: Paperback
+        language:
+          type: string
+          example: English
+        rating:
+          type: number
+          example: 4.8
+        reviewCount:
+          type: integer
+          example: 145
+        copiesSold:
+          type: integer
+          example: 145
+        imageUrl:
+          type: string
+          example: /images/joy-of-minimalism.png
+        tentativeDeliveryDate:
+          type: string
+          example: Mon, 21 Jul
+
+    BookDetailDto:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        title:
+          type: string
+          example: The Joy of Minimalism
+        author:
+          type: string
+          example: Daniel Reed
+        authorBio:
+          type: string
+          example: Daniel Reed is a writer, minimalist, and productivity coach based in San Francisco.
+        publisher:
+          type: string
+          example: ABC Publishers
+        description:
+          type: string
+          example: Discover how less can truly be more.
+        price:
+          type: number
+          example: 149.0
+        format:
+          type: string
+          example: Paperback
+        language:
+          type: string
+          example: English
+        rating:
+          type: number
+          example: 4.8
+        reviewCount:
+          type: integer
+          example: 145
+        copiesSold:
+          type: integer
+          example: 145
+        imageUrl:
+          type: string
+          example: /images/joy-of-minimalism.png
+        tentativeDeliveryDate:
+          type: string
+          example: Mon, 21 Jul
+        reviews:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReviewDto'
+
+    ReviewRequest:
+      type: object
+      required: [reviewerName, rating, comment]
+      properties:
+        reviewerName:
+          type: string
+          example: John Smith
+        rating:
+          type: integer
+          example: 5
+        comment:
+          type: string
+          example: A fantastic practical guide to achieving clarity.
+
+    ReviewDto:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        reviewerName:
+          type: string
+          example: John Smith
+        rating:
+          type: integer
+          example: 5
+        comment:
+          type: string
+          example: A fantastic practical guide to achieving clarity.
+        createdAt:
+          type: string
+          format: date-time
+
+    AddToCartRequest:
+      type: object
+      required: [userId, bookId, quantity]
+      properties:
+        userId:
+          type: integer
+          example: 1
+        bookId:
+          type: integer
+          example: 1
+        quantity:
+          type: integer
+          example: 1
+
+    UpdateCartItemRequest:
+      type: object
+      required: [quantity]
+      properties:
+        quantity:
+          type: integer
+          example: 2
+
+    CartItemDto:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 10
+        bookId:
+          type: integer
+          example: 1
+        title:
+          type: string
+          example: The Joy of Minimalism
+        author:
+          type: string
+          example: Daniel Reed
+        format:
+          type: string
+          example: Paperback
+        price:
+          type: number
+          example: 149.0
+        quantity:
+          type: integer
+          example: 1
+        subTotal:
+          type: number
+          example: 149.0
+        imageUrl:
+          type: string
+          example: /images/joy-of-minimalism.png
+        deliveryDate:
+          type: string
+          example: Mon, 21 Jul
+
+    CartDto:
+      type: object
+      properties:
+        cartId:
+          type: integer
+          example: 1
+        userId:
+          type: integer
+          example: 1
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CartItemDto'
+        itemCount:
+          type: integer
+          example: 2
+        totalPrice:
+          type: number
+          example: 508.00
+        tax:
+          type: number
+          example: 62.00
+        deliveryCharges:
+          type: number
+          example: 0.00
+        discount:
+          type: number
+          example: 100.00
+        grandTotal:
+          type: number
+          example: 470.00
+
+    ShippingRateRequest:
+      type: object
+      required: [pin, cartTotal]
+      properties:
+        pin:
+          type: string
+          example: '400001'
+        cartTotal:
+          type: number
+          example: 508.00
+
+    ShippingRateResponse:
+      type: object
+      properties:
+        shippingCost:
+          type: number
+          example: 0.00
+        isFreeDelivery:
+          type: boolean
+          example: true
+        estimatedDays:
+          type: integer
+          example: 3
+        tentativeDeliveryDate:
+          type: string
+          example: Mon, 21 Jul
+
+    PaymentRequest:
+      type: object
+      required: [orderId, paymentMethod, amount]
+      properties:
+        orderId:
+          type: integer
+          example: 101
+        paymentMethod:
+          type: string
+          enum: [CREDIT_CARD, DEBIT_CARD, UPI, WALLET]
+          example: CREDIT_CARD
+        cardNumber:
+          type: string
+          example: '4111-XXXX-XXXX-1111'
+        cardHolderName:
+          type: string
+          example: Daniel Reed
+        cvv:
+          type: string
+          example: '123'
+        expiryDate:
+          type: string
+          example: '08/28'
+        upiId:
+          type: string
+          example: daniel@okhdfcbank
+        amount:
+          type: number
+          example: 470.00
+
+    PaymentResponse:
+      type: object
+      properties:
+        transactionId:
+          type: string
+          example: TXN-8947291834
+        status:
+          type: string
+          example: SUCCESS
+        paymentMethod:
+          type: string
+          example: CREDIT_CARD
+        amountPaid:
+          type: number
+          example: 470.00
+        timestamp:
+          type: string
+          format: date-time
+
+    CouponRequest:
+      type: object
+      required: [couponCode, cartTotal]
+      properties:
+        couponCode:
+          type: string
+          example: SAVE100
+        cartTotal:
+          type: number
+          example: 508.00
+
+    CouponResponse:
+      type: object
+      properties:
+        couponCode:
+          type: string
+          example: SAVE100
+        discountAmount:
+          type: number
+          example: 100.00
+        isValid:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: Coupon applied successfully
+
+    RedeemPointsRequest:
+      type: object
+      required: [userId, pointsToRedeem, cartTotal]
+      properties:
+        userId:
+          type: integer
+          example: 1
+        pointsToRedeem:
+          type: integer
+          example: 100
+        cartTotal:
+          type: number
+          example: 508.00
+
+    RedeemPointsResponse:
+      type: object
+      properties:
+        pointsRedeemed:
+          type: integer
+          example: 100
+        discountValue:
+          type: number
+          example: 100.00
+        remainingPoints:
+          type: integer
+          example: 150
+        status:
+          type: string
+          example: APPLIED
+
+    CheckoutRequest:
+      type: object
+      required: [userId, addressId, paymentMethod]
+      properties:
+        userId:
+          type: integer
+          example: 1
+        addressId:
+          type: integer
+          example: 1
+        couponCode:
+          type: string
+          example: SAVE100
+        pointsRedeemed:
+          type: integer
+          example: 0
+        paymentMethod:
+          type: string
+          example: CREDIT_CARD
+        cardDetails:
+          type: object
+          properties:
+            cardNumber:
+              type: string
+              example: 'XXXX-XXXX-XXXX-XXXX'
+            nameOnCard:
+              type: string
+              example: Daniel Reed
+            cvv:
+              type: string
+              example: 'XXX'
+            expiry:
+              type: string
+              example: 'MM/YYYY'
+
+    OrderItemDto:
+      type: object
+      properties:
+        bookId:
+          type: integer
+          example: 1
+        title:
+          type: string
+          example: The Joy of Minimalism
+        author:
+          type: string
+          example: Daniel Reed
+        price:
+          type: number
+          example: 149.0
+        quantity:
+          type: integer
+          example: 1
+        format:
+          type: string
+          example: Paperback
+        imageUrl:
+          type: string
+          example: /images/joy-of-minimalism.png
+
+    OrderResponse:
+      type: object
+      properties:
+        orderId:
+          type: integer
+          example: 1001
+        orderNumber:
+          type: string
+          example: ORD-20250721-001
+        userId:
+          type: integer
+          example: 1
+        status:
+          type: string
+          example: CONFIRMED
+        createdAt:
+          type: string
+          format: date-time
+        totalItems:
+          type: integer
+          example: 2
+        itemsPrice:
+          type: number
+          example: 508.00
+        tax:
+          type: number
+          example: 62.00
+        deliveryCharges:
+          type: number
+          example: 0.00
+        discount:
+          type: number
+          example: 100.00
+        totalAmount:
+          type: number
+          example: 470.00
+        tentativeDeliveryDate:
+          type: string
+          example: Mon, 21 Jul
+        paymentStatus:
+          type: string
+          example: PAID
+        cancellableUntil:
+          type: string
+          format: date-time
+        canCancel:
+          type: boolean
+          example: true
+        shippingAddress:
+          $ref: '#/components/schemas/AddressDto'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItemDto'
+
+    CancelOrderRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          example: Ordered by mistake
